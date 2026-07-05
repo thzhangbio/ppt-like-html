@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ppt-like-html · VIVOID HTML 可视化编辑器</title>
+  <link rel="stylesheet" href="src/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brandline">
+        <img id="brandLogo" class="brand-logo" alt="VIVOID Logo" />
+        <div>
+          <strong>ppt-like-html</strong>
+          <span>HTML 16:9 可视化编辑器</span>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button id="newSlideBtn">新建页</button>
+        <button id="duplicateSlideBtn">复制页</button>
+        <button id="exportHtmlBtn" class="primary">导出 HTML</button>
+        <button id="exportJsonBtn">导出 JSON</button>
+        <label class="file-btn">导入 JSON<input id="importJsonInput" type="file" accept="application/json" /></label>
+      </div>
+    </header>
+
+    <aside class="leftbar">
+      <section>
+        <h3>页面</h3>
+        <div id="slideList" class="slide-list"></div>
+      </section>
+      <section>
+        <h3>插入元素</h3>
+        <div class="tool-grid">
+          <button data-add="text-title">标题</button>
+          <button data-add="text-body">正文</button>
+          <button data-add="caption">图注</button>
+          <button data-add="image">图片</button>
+          <button data-add="rect">矩形</button>
+          <button data-add="roundrect">卡片</button>
+          <button data-add="circle">圆形</button>
+          <button data-add="hex">六边形</button>
+          <button data-add="line">线条</button>
+        </div>
+        <input id="imageInput" type="file" accept="image/*" hidden />
+      </section>
+      <section>
+        <h3>版式模板</h3>
+        <div class="template-list">
+          <button data-layout="cover">封面</button>
+          <button data-layout="chapter">章节页</button>
+          <button data-layout="two-image">单页双图</button>
+          <button data-layout="four-grid">四图并列</button>
+          <button data-layout="diagram">图解展示</button>
+          <button data-layout="flow">流程图</button>
+          <button data-layout="fishbone">鱼骨图</button>
+          <button data-layout="matrix">2×2 矩阵</button>
+        </div>
+      </section>
+      <section>
+        <h3>提示</h3>
+        <p class="hint">单击选中；Shift/Cmd/Ctrl 点击多选；双击文字直接编辑；拖动空白区域可框选；右侧面板可改属性。</p>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <div class="workspace-toolbar">
+        <div class="zoom-controls">
+          <button id="zoomOutBtn">−</button>
+          <span id="zoomLabel">100%</span>
+          <button id="zoomInBtn">＋</button>
+        </div>
+        <div class="layer-controls">
+          <button data-layer="front">置顶</button>
+          <button data-layer="up">上移</button>
+          <button data-layer="down">下移</button>
+          <button data-layer="back">置底</button>
+        </div>
+      </div>
+      <div id="stageScroller" class="stage-scroller">
+        <div id="slideCanvas" class="slide-canvas">
+          <div id="selectionBox" class="selection-box hidden">
+            <span class="handle nw" data-handle="nw"></span>
+            <span class="handle ne" data-handle="ne"></span>
+            <span class="handle sw" data-handle="sw"></span>
+            <span class="handle se" data-handle="se"></span>
+          </div>
+          <div id="marquee" class="marquee hidden"></div>
+        </div>
+      </div>
+    </main>
+
+    <aside class="rightbar">
+      <section>
+        <h3>属性面板</h3>
+        <p id="selectionInfo" class="hint">未选中元素</p>
+      </section>
+
+      <section class="inspector-group common-inspector">
+        <h4>位置与尺寸</h4>
+        <div class="form-grid two">
+          <label>X<input id="propX" type="number" /></label>
+          <label>Y<input id="propY" type="number" /></label>
+          <label>宽<input id="propW" type="number" /></label>
+          <label>高<input id="propH" type="number" /></label>
+        </div>
+      </section>
+
+      <section class="inspector-group text-inspector hidden">
+        <h4>文字</h4>
+        <label>内容<textarea id="propText" rows="4"></textarea></label>
+        <label>角色<select id="propRole">
+          <option value="title">标题</option>
+          <option value="body">正文</option>
+          <option value="caption">图注</option>
+          <option value="tag">标签</option>
+          <option value="header">页眉</option>
+        </select></label>
+        <label>字体<select id="propFont">
+          <option value="serif">衬线标题</option>
+          <option value="sans">无衬线正文</option>
+          <option value="mono">等宽标签</option>
+        </select></label>
+        <div class="form-grid two">
+          <label>字号<input id="propFontSize" type="number" /></label>
+          <label>字重<select id="propFontWeight"><option>400</option><option>500</option><option>600</option><option>700</option><option>800</option></select></label>
+        </div>
+        <div class="form-grid two">
+          <label>颜色<input id="propColor" type="color" /></label>
+          <label>对齐<select id="propAlign"><option value="left">左</option><option value="center">中</option><option value="right">右</option></select></label>
+        </div>
+      </section>
+
+      <section class="inspector-group image-inspector hidden">
+        <h4>图片</h4>
+        <label>展示样式<select id="propImageStyle">
+          <option value="contain">完整显示</option>
+          <option value="cover">裁剪填满</option>
+          <option value="frame">卡片边框</option>
+          <option value="circle">圆形裁剪</option>
+          <option value="raw">无边框</option>
+        </select></label>
+        <label>裁剪模式<select id="propObjectFit"><option value="contain">contain</option><option value="cover">cover</option></select></label>
+        <div class="form-grid two">
+          <label>放大<input id="propImageZoom" type="number" step="0.05" min="0.2" max="5" /></label>
+          <label>圆角<input id="propImageRadius" type="number" /></label>
+        </div>
+        <div class="form-grid two">
+          <label>水平裁剪<input id="propObjectX" type="range" min="0" max="100" /></label>
+          <label>垂直裁剪<input id="propObjectY" type="range" min="0" max="100" /></label>
+        </div>
+      </section>
+
+      <section class="inspector-group shape-inspector hidden">
+        <h4>图形</h4>
+        <label>类型<select id="propShapeKind"><option value="rect">矩形</option><option value="roundrect">圆角卡片</option><option value="circle">圆形</option><option value="hex">六边形</option><option value="line">线条</option></select></label>
+        <div class="form-grid two">
+          <label>填充<input id="propFill" type="color" /></label>
+          <label>描边<input id="propStroke" type="color" /></label>
+          <label>线宽<input id="propStrokeWidth" type="number" /></label>
+          <label>圆角<input id="propRadius" type="number" /></label>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+  <script src="src/brand.js"></script>
+  <script src="src/app.js"></script>
+</body>
+</html>
