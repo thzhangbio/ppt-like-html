@@ -1,6 +1,6 @@
 const TEMPLATE_URL = 'VIVOID_同风格正式汇报模板套件.html';
 const $ = (id) => document.getElementById(id);
-const state = { selected: new Set(), history: [], future: [], templateHead: '', fileHandle: null };
+const state = { selected: new Set(), history: [], future: [], templateHead: '', fileHandle: null, presentingIndex: 0 };
 
 const rolePreset = {
   title: { fontFamily: 'var(--font-display)', fontSize: '38px', fontWeight: '700', color: 'var(--ink)', lineHeight: '1.22' },
@@ -99,13 +99,15 @@ function onElementPointerDown(ev){
 }
 
 function bindChrome(){
-  $('btnUndo').onclick = undo; $('btnRedo').onclick = redo; $('btnDelete').onclick = deleteSelected;
-  $('btnBringFront').onclick = () => layer('front'); $('btnSendBack').onclick = () => layer('back');
-  $('btnImage').onclick = () => { const first = selectedElements()[0]; if (first) replaceImage(first); };
-  $('btnSave').onclick = saveEditableHtml;
-  $('btnSaveAs').onclick = saveEditableHtmlAs;
-  $('btnExport').onclick = exportStaticHtml;
-  $('imageInput').onchange = onImagePicked;
+  bindClick('btnUndo', undo); bindClick('btnRedo', redo); bindClick('btnDelete', deleteSelected);
+  bindClick('btnBringFront', () => layer('front')); bindClick('btnSendBack', () => layer('back'));
+  bindClick('btnImage', () => { const first = selectedElements()[0]; if (first) replaceImage(first); else insertImageFromPicker(); });
+  bindClick('btnPlay', enterPresentation);
+  bindClick('btnExitPlay', exitPresentation);
+  bindClick('btnSave', saveEditableHtml);
+  bindClick('btnSaveAs', saveEditableHtmlAs);
+  bindClick('btnExport', exportStaticHtml);
+  if ($('imageInput')) $('imageInput').onchange = onImagePicked;
   ['propX','propY','propW','propH'].forEach(id => $(id).addEventListener('change', applyBox));
   $('propRole').addEventListener('change', applyRole);
   $('propFontSize').addEventListener('change', applyFontFields);
@@ -113,9 +115,12 @@ function bindChrome(){
   $('propText').addEventListener('change', applyText);
   $('propFit').addEventListener('change', applyImageFit);
   document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('paste', onPaste);
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('presentation-mode')) exitPresentation(false); });
   document.addEventListener('pointerdown', (ev)=>{ if(!ev.target.closest('[data-editable],.editor-chrome,.editor-selection')) clearSelection(); });
   bindResizeHandle();
 }
+function bindClick(id, fn){ const el=$(id); if(el) el.onclick=fn; }
 
 function bindResizeHandle(){
   const box = $('selectionBox');
@@ -181,7 +186,45 @@ function applyFontFields(){ pushHistory(); selectedElements().filter(isTextLike)
 function applyText(){ pushHistory(); selectedElements().filter(isTextLike).forEach(el=>{ el.innerText=$('propText').value; }); updateSelectionBox(); }
 function applyImageFit(){ pushHistory(); selectedElements().filter(el=>el.tagName==='IMG').forEach(img=>{ img.style.objectFit=$('propFit').value; img.style.width='100%'; img.style.height='100%'; }); }
 function replaceImage(target){ state.imageTarget = target; $('imageInput').click(); }
-function onImagePicked(ev){ const file=ev.target.files[0]; if(!file||!state.imageTarget)return; const reader=new FileReader(); reader.onload=()=>{ pushHistory(); let target=state.imageTarget; if(target.tagName==='IMG'){ target.src=reader.result; target.style.objectFit=$('propFit').value || 'contain'; } else { const img=document.createElement('img'); img.src=reader.result; img.dataset.editable='1'; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='contain'; target.innerHTML=''; target.appendChild(img); markEditable(img); } ev.target.value=''; toast('图片已更新'); }; reader.readAsDataURL(file); }
+function insertImageFromPicker(){ state.imageTarget = null; $('imageInput').click(); }
+function onImagePicked(ev){
+  const file=ev.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    pushHistory();
+    if(state.imageTarget) setImageOnTarget(state.imageTarget, reader.result);
+    else addFloatingImage(reader.result);
+    ev.target.value='';
+    toast('图片已更新');
+  };
+  reader.readAsDataURL(file);
+}
+function onPaste(ev){
+  const active=document.activeElement;
+  const typing=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA'||active.tagName==='SELECT'||active.isContentEditable);
+  const item=Array.from(ev.clipboardData?.items||[]).find(i=>i.type.startsWith('image/'));
+  if(!item || typing) return;
+  ev.preventDefault();
+  const reader=new FileReader();
+  reader.onload=()=>{ pushHistory(); const target=selectedElements()[0]; if(target && (target.tagName==='IMG'||target.classList.contains('placeholder'))) setImageOnTarget(target, reader.result); else addFloatingImage(reader.result); toast('已粘贴图片，并以内嵌形式随 HTML 保存'); };
+  reader.readAsDataURL(item.getAsFile());
+}
+function setImageOnTarget(target, src){
+  if(target.tagName==='IMG'){
+    target.src=src; target.style.objectFit=$('propFit')?.value || 'contain'; target.style.width='100%'; target.style.height='100%';
+  } else {
+    const img=document.createElement('img'); img.src=src; img.dataset.editable='1'; img.style.width='100%'; img.style.height='100%'; img.style.objectFit='contain';
+    target.innerHTML=''; target.appendChild(img); markEditable(img); selectOnly(img);
+  }
+}
+function addFloatingImage(src){
+  const slide=currentSlide();
+  if(!slide) return;
+  const img=document.createElement('img');
+  img.src=src; img.dataset.editable='1'; img.className='editable-absolute';
+  Object.assign(img.style,{position:'absolute',left:'760px',top:'210px',width:'320px',height:'210px',objectFit:'contain',zIndex:nextZ(slide),background:'#fff',border:'1px solid rgba(21,32,43,.16)'});
+  slide.appendChild(img); img.dataset.absolute='1'; markEditable(img); selectOnly(img);
+}
 function deleteSelected(){ const selected=selectedElements(); if(!selected.length)return; pushHistory(); selected.forEach(el=>{ const ghost=document.querySelector(`[data-ghost-for="${el.dataset.ghostId}"]`); if(ghost) ghost.remove(); el.remove(); }); clearSelection(); }
 function layer(type){ const selected=selectedElements(); if(!selected.length)return; pushHistory(); selected.forEach(materialize); selected.forEach(el=>{ el.style.zIndex = type==='front' ? nextZ(el.closest('.slide')) : 1; }); updateSelectionBox(); }
 function nextZ(slide){ return Math.max(1,...Array.from(slide.children).map(n=>parseInt(getComputedStyle(n).zIndex)||1))+1; }
@@ -189,7 +232,41 @@ function nextZ(slide){ return Math.max(1,...Array.from(slide.children).map(n=>pa
 function pushHistory(initial=false){ const d=deck(); if(!d)return; const snap=d.innerHTML; if(!initial){ state.history.push(snap); if(state.history.length>80)state.history.shift(); state.future.length=0; } }
 function undo(){ if(!state.history.length){toast('没有可撤销操作');return;} state.future.push(deck().innerHTML); deck().innerHTML=state.history.pop(); clearSelection(false); prepareDeck(); toast('已撤销'); }
 function redo(){ if(!state.future.length){toast('没有可恢复操作');return;} state.history.push(deck().innerHTML); deck().innerHTML=state.future.pop(); clearSelection(false); prepareDeck(); toast('已恢复'); }
-function onKeyDown(ev){ const active=document.activeElement; const typing=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA'||active.tagName==='SELECT'||active.isContentEditable); if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault(); ev.shiftKey?redo():undo(); return;} if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'){ev.preventDefault(); redo(); return;} if(!typing&&(ev.key==='Delete'||ev.key==='Backspace')){ev.preventDefault(); deleteSelected();}}
+function onKeyDown(ev){
+  const active=document.activeElement; const typing=active&&(active.tagName==='INPUT'||active.tagName==='TEXTAREA'||active.tagName==='SELECT'||active.isContentEditable);
+  if(document.body.classList.contains('presentation-mode')){
+    if(ev.key==='Escape'){ ev.preventDefault(); exitPresentation(); return; }
+    if(['ArrowRight','PageDown',' '].includes(ev.key)){ ev.preventDefault(); presentStep(1); return; }
+    if(['ArrowLeft','PageUp'].includes(ev.key)){ ev.preventDefault(); presentStep(-1); return; }
+  }
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='z'){ev.preventDefault(); ev.shiftKey?redo():undo(); return;}
+  if((ev.ctrlKey||ev.metaKey)&&ev.key.toLowerCase()==='y'){ev.preventDefault(); redo(); return;}
+  if(!typing&&ev.key.toLowerCase()==='f'){ev.preventDefault(); enterPresentation(); return;}
+  if(!typing&&(ev.key==='Delete'||ev.key==='Backspace')){ev.preventDefault(); deleteSelected();}
+}
+function currentSlide(){
+  const selected=selectedElements()[0];
+  return selected?.closest('.slide') || slides()[state.presentingIndex] || slides()[0];
+}
+function enterPresentation(){
+  const all=slides(); if(!all.length)return;
+  const current=currentSlide(); state.presentingIndex=Math.max(0, all.indexOf(current));
+  clearSelection();
+  document.body.classList.add('presentation-mode');
+  showPresentingSlide();
+  if(document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(()=>{});
+}
+function exitPresentation(closeFullscreen=true){
+  document.body.classList.remove('presentation-mode');
+  slides().forEach(s=>s.classList.remove('is-presenting'));
+  if(closeFullscreen && document.fullscreenElement) document.exitFullscreen().catch(()=>{});
+}
+function presentStep(delta){
+  const all=slides(); if(!all.length)return;
+  state.presentingIndex=Math.min(all.length-1, Math.max(0, state.presentingIndex+delta));
+  showPresentingSlide();
+}
+function showPresentingSlide(){ slides().forEach((s,i)=>s.classList.toggle('is-presenting', i===state.presentingIndex)); }
 
 async function saveEditableHtml(){
   if (!state.fileHandle) return saveEditableHtmlAs();
@@ -221,7 +298,32 @@ async function buildEditableHtml(){
   const editorCss = await readAssetText('src/template-editor.css', 'style[data-editor-style]');
   const editorJs = await readAssetText('src/template-editor.js', 'script[data-editor-runtime]');
   const templateHead = state.templateHead || readEmbeddedTemplateHead();
-  return `<!doctype html>\n<html lang="zh-CN">\n<head>\n<meta charset="utf-8" />\n<meta name="viewport" content="width=device-width, initial-scale=1" />\n<title>ppt-like-html · 可编辑副本</title>\n${templateHead}\n<script type="application/json" id="pptlikeTemplateHeadJson">${escapeJsonForScript(templateHead)}</script>\n<style data-editor-style>\n${editorCss}\n</style>\n</head>\n<body>\n${editorChromeHtml()}\n<div id="templateMount" class="template-mount">\n${deckHtml}\n</div>\n<input id="imageInput" type="file" accept="image/*" hidden />\n<div id="selectionBox" class="editor-selection hidden"><span class="resize-handle"></span></div>\n<div id="toast" class="editor-toast hidden"></div>\n<script data-editor-runtime>\n${editorJs.replace(/<\\/script/gi,'<\\\\/script')}\n</script>\n</body>\n</html>`;
+  const safeEditorJs = editorJs.replaceAll('</script', '<\\/script');
+  return `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ppt-like-html · 可编辑副本</title>
+${templateHead}
+<script type="application/json" id="pptlikeTemplateHeadJson">${escapeJsonForScript(templateHead)}</script>
+<style data-editor-style>
+${editorCss}
+</style>
+</head>
+<body>
+${editorChromeHtml()}
+<div id="templateMount" class="template-mount">
+${deckHtml}
+</div>
+<input id="imageInput" type="file" accept="image/*" hidden />
+<div id="selectionBox" class="editor-selection hidden"><span class="resize-handle"></span></div>
+<div id="toast" class="editor-toast hidden"></div>
+<script data-editor-runtime>
+${safeEditorJs}
+</script>
+</body>
+</html>`;
 }
 function editorChromeHtml(){ return document.getElementById('editorChrome').outerHTML; }
 async function readAssetText(url, inlineSelector){ const inline = document.querySelector(inlineSelector); if (inline) return inline.textContent; try { return await fetch(url, { cache:'no-store' }).then(r=>r.text()); } catch { return ''; } }
