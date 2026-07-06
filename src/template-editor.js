@@ -326,7 +326,17 @@ ${safeEditorJs}
 </html>`;
 }
 function editorChromeHtml(){ return document.getElementById('editorChrome').outerHTML; }
-async function readAssetText(url, inlineSelector){ const inline = document.querySelector(inlineSelector); if (inline) return inline.textContent; try { return await fetch(url, { cache:'no-store' }).then(r=>r.text()); } catch { return ''; } }
+async function readAssetText(url, inlineSelector){
+  const inline = document.querySelector(inlineSelector);
+  if (inline) return inline.textContent;
+  for (const candidate of [url, '../' + url]) {
+    try {
+      const response = await fetch(candidate, { cache:'no-store' });
+      if (response.ok) return await response.text();
+    } catch {}
+  }
+  return '';
+}
 function readEmbeddedTemplateHead(){ const json = document.getElementById('pptlikeTemplateHeadJson'); if (json) { try { return JSON.parse(json.textContent); } catch {} } return Array.from(document.head.children).filter(n => !n.closest('.editor-chrome') && n.tagName !== 'TITLE' && !n.matches('[data-editor-style],script,#pptlikeTemplateHeadJson')).map(n=>n.outerHTML).join('\n'); }
 function escapeJsonForScript(value){ return JSON.stringify(value).replace(/<\//g,'<\\/'); }
 
